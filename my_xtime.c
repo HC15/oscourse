@@ -14,3 +14,5 @@ asmlinkage int sys_my_xtime(struct timespec *current_time) {
 		return -EFAULT;
 	}
 }
+
+EXPORT_SYMBOL(sys_my_xtime);
