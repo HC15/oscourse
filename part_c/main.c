@@ -6,9 +6,11 @@
 #include <errno.h>
 
 #define N 80
+#define MAX_LENGTH 80
 
 int main() {
 	struct timeval timeOfDay[N];
+	char kernel_time[N][MAX_LENGTH];
 
 	int fd;
 	fd = open("/dev/mytime", O_RDONLY);
@@ -17,26 +19,29 @@ int main() {
 		return errno;
 	}
 
-	char kernel_time[N];
-	int bytes_read;
-	bytes_read = read(fd, kernel_time, N);
-	if(bytes_read < 0) {
-		perror("Failed to read: ");
-		return errno;
-	}
 
 	int success;
-	success = gettimeofday(&timeOfDay, NULL);
-	if(success < 0) {
-		perror("Time of day failed: ");
-		return errno;
+	int bytes_read;
+	int i;
+	for(i = 0; i < N; i++) {
+		success = gettimeofday(&timeOfDay[i], NULL);
+		if(success < 0) {
+			perror("Time of day failed: ");
+			return errno;
+		}
+		bytes_read = read(fd, kernel_time, N);
+		if(bytes_read < 0) {
+			perror("Failed to read: ");
+			return errno;
+		}
 	}
 
-	printf("Kernel module\n%s\n", kernel_time);
+	for(i = 0; i < N; i++) {
+		printf("Kernel module\n%s\n", kernel_time[i]);
 
-	printf("User level\n");
-	printf("Time of day in seconds: %ld\n", timeOfDay->tv_sec);
-	printf("Time of day in microseconds: %ld\n", timeOfDay->tv_usec);
-
+		printf("User level\n");
+		printf("Time of day in seconds: %ld\n", timeOfDay[i].tv_sec);
+		printf("Time of day in microseconds: %ld\n", timeOfDay[i].tv_usec);
+	}
 	return 0;
 }
