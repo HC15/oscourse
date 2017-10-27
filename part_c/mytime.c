@@ -1,6 +1,8 @@
 #include <linux/init.h>
 #include <linux/module.h>
+#include <linux/device.h>
 #include <linux/kernel.h>
+#include <linux/fs.h>
 #include <linux/slab.h>
 #include <linux/time.h>
 #include <asm/uaccess.h>
@@ -8,12 +10,29 @@
 MODULE_LICENSE("DUAL BSD/GPL");
 MODULE_AUTHOR("Harvey Chen");
 
-int __init mytime_init(void) {
+#define NAME "mytime"
+static int deviceNumber;
+
+static int mytime_open(struct inode *, struct file *);
+static ssize_t mytime_read(struct file *file, char __user * out, size_t size, loff_t * off);
+
+static struct file_operations my_fops = {
+	.open = mytime_open,
+	.read = mytime_read
+};
+
+static int __init mytime_init(void) {
 	printk(KERN_ALERT "mytime module init\n");
+	deviceNumber = register_chrdev(0, NAME, &my_fops);
 	return 0;
 }
 
-ssize_t mytime_read(struct file *file, char __user * out, size_t size, loff_t * off) {
+static int mytime_open(struct inode *inode, struct file *file) {
+	printk(KERN_ALERT "mytime device opened");
+	return 0;
+}
+
+static ssize_t mytime_read(struct file *file, char __user * out, size_t size, loff_t * off) {
 	if(access_ok(VERIFY_WRITE, out, size)) {
 		char* buffer = (char*) kmalloc(sizeof(char) * 75, GFP_KERNEL);
 
@@ -38,6 +57,7 @@ ssize_t mytime_read(struct file *file, char __user * out, size_t size, loff_t * 
 		getnstimeofday(&timeofday);
 
 		printk(KERN_DEFAULT "current_kernel_time: %ld %ld \ngetnstimeofday: %ld %ld", kernel_time.tv_sec, kernel_time.tv_nsec, timeofday.tv_sec, timeofday.tv_nsec);
+		copy_to_user(out, &buffer, size);
 		return 1;
 	}
 	else{
@@ -45,7 +65,8 @@ ssize_t mytime_read(struct file *file, char __user * out, size_t size, loff_t * 
 	}
 }
 
-void __exit mytime_exit(void) {
+static void __exit mytime_exit(void) {
+	unregister_chrdev(deviceNumber, NAME);
 	printk(KERN_ALERT "mytime module exit\n");
 }
 
