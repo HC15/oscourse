@@ -1,5 +1,6 @@
 #include <linux/init.h>
 #include <linux/module.h>
+#include <linux/miscdevice.h>
 #include <linux/device.h>
 #include <linux/kernel.h>
 #include <linux/fs.h>
@@ -9,9 +10,6 @@
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Harvey Chen");
-
-#define NAME "mytime"
-static int deviceNumber;
 
 static int mytime_open(struct inode *, struct file *);
 static int mytime_close(struct inode *, struct file *);
@@ -24,9 +22,16 @@ static struct file_operations my_fops = {
 	.read = mytime_read
 };
 
+static struct miscdevice mytime_device = {
+	.minor = MISC_DYNAMIC_MINOR,
+	.name  = "mytime",
+	.fops = &my_fops
+
+};
+
 static int __init mytime_init(void) {
 	printk(KERN_ALERT "mytime module init\n");
-	deviceNumber = register_chrdev(0, NAME, &my_fops);
+	int deviceNumber = misc_register(&mytime_device);
 	if(deviceNumber < 0) {
 		printk(KERN_ALERT "mytime module init failed\n");
 		return deviceNumber;
@@ -49,43 +54,15 @@ static ssize_t mytime_read(struct file *file, char __user * out, size_t size, lo
 	if(access_ok(VERIFY_WRITE, out, size)) {
 		char* buffer = (char*) kmalloc(sizeof(char) * size, GFP_KERNEL);
 
-		int success;
-		success = sprintf(buffer, "current_kernel_time: ");
-
 		struct timespec kernel_time = current_kernel_time();
-		int length;
-
-		length = snprintf(NULL, 0, "%ld", kernel_time.tv_nsec);
-		char* kernel_time_nsec = (char*) kmalloc(length + 1, GFP_KERNEL);
-		success += sprintf(buffer + success, kernel_time_nsec);
-		kfree(kernel_time_nsec);
-
-		length = snprintf(NULL, 0, "%ld", kernel_time.tv_sec);
-		char* kernel_time_sec = (char*) kmalloc(length + 1, GFP_KERNEL);
-		success += sprintf(buffer + success, kernel_time_sec);
-		kfree(kernel_time_sec);
-
-		success += sprintf(buffer + success, "\n");
-
 		struct timespec timeofday;
 		getnstimeofday(&timeofday);
 
-		length = snprintf(NULL, 0, "%ld", timeofday.tv_nsec);
-		char* timeofday_nsec = (char*) kmalloc(length + 1, GFP_KERNEL);
-		success += sprintf(buffer + success, timeofday_nsec);
-		kfree(timeofday_nsec);
-
-		length = snprintf(NULL, 0, "%ld", timeofday.tv_sec);
-		char* timeofday_sec = (char*) kmalloc(length + 1, GFP_KERNEL);
-		success += sprintf(buffer + success, timeofday_sec);
-		kfree(timeofday_sec);
-
-		success += sprintf(buffer + success, "\n");
-
-		printk(KERN_DEFAULT "current_kernel_time: %ld %ld \ngetnstimeofday: %ld %ld", kernel_time.tv_sec, kernel_time.tv_nsec, timeofday.tv_sec, timeofday.tv_nsec);
-
+		printk(KERN_ALERT "current_kernel_time: %ld %ld \ngetnstimeofday: %ld %ld", kernel_time.tv_sec, kernel_time.tv_nsec, timeofday.tv_sec, timeofday.tv_nsec);
+		int bytes_read;
+		bytes_read = sprintf(buffer, "current_kernel_time: %ld %ld \ngetnstimeofday: %ld %ld", kernel_time.tv_sec, kernel_time.tv_nsec, timeofday.tv_sec, timeofday.tv_nsec);
 		copy_to_user(out, &buffer, size);
-		return success;
+		return bytes_read;
 	}
 	else{
 		return -EFAULT;
@@ -93,7 +70,8 @@ static ssize_t mytime_read(struct file *file, char __user * out, size_t size, lo
 }
 
 static void __exit mytime_exit(void) {
-	unregister_chrdev(deviceNumber, NAME);
+	misc_deregister(&mytime_device);
+//	unregister_chrdev(deviceNumber, NAME);
 	printk(KERN_ALERT "mytime module exit\n");
 }
 
