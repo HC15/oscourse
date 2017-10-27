@@ -4,9 +4,10 @@
 #include <fcntl.h>
 #include <time.h>
 #include <errno.h>
+#include <string.h>
 
-#define N 80
-#define MAX_LENGTH 80
+#define N 10
+#define MAX_LENGTH 100
 
 int main() {
 	struct timeval timeOfDay[N];
@@ -19,7 +20,6 @@ int main() {
 		return errno;
 	}
 
-
 	int success;
 	int bytes_read;
 	int i;
@@ -29,7 +29,7 @@ int main() {
 			perror("Time of day failed: ");
 			return errno;
 		}
-		bytes_read = read(fd, kernel_time, N);
+		bytes_read = read(fd, &kernel_time[i], MAX_LENGTH);
 		if(bytes_read < 0) {
 			perror("Failed to read: ");
 			return errno;
@@ -41,7 +41,7 @@ int main() {
 
 		printf("User level\n");
 		printf("Time of day in seconds: %ld\n", timeOfDay[i].tv_sec);
-		printf("Time of day in microseconds: %ld\n", timeOfDay[i].tv_usec);
+		printf("Time of day in microseconds: %ld\n\n", timeOfDay[i].tv_usec);
 	}
 	return 0;
 }
