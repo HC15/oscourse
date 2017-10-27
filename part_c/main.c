@@ -3,33 +3,40 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <time.h>
+#include <errno.h>
 
 #define N 80
 
 int main() {
-	struct timeval gtodTimes[N];
-	char procClockTime[N];
+	struct timeval timeOfDay[N];
 
-	/* allocate memory for character buffers HERE before you use them */
+	int fd;
+	fd = open("/dev/mytime", O_RDONLY);
+	if(fd < 0) {
+		perror("Failed to open: ");
+		return errno;
+	}
 
-	int fd = open("/dev/mytime", O_RDONLY);
-	/* check for errors HERE */
-
-	int i;
+	char kernel_time[N];
 	int bytes_read;
-	for( i=0; i < N; i++)
-	{
-		gettimeofday(&gtodTimes[i], 0);
-		bytes_read = read(fd, procClockTime[i], 80);
-		/* check for errors HERE */
+	bytes_read = read(fd, kernel_time, N);
+	if(bytes_read < 0) {
+		perror("Failed to read: ");
+		return errno;
 	}
 
-//	close(fd);
-
-	for(i=0; i < N; i++) {
-//		printf("...", gtodTimes[i], procClockTime[i]);
-		printf("HI");
-		/* fix the output format appropriately in the above line */
+	int success;
+	success = gettimeofday(&timeOfDay, NULL);
+	if(success < 0) {
+		perror("Time of day failed: ");
+		return errno;
 	}
+
+	printf("Kernel module\n%s\n", kernel_time);
+
+	printf("User level\n");
+	printf("Time of day in seconds: %ld\n", timeOfDay->tv_sec);
+	printf("Time of day in microseconds: %ld\n", timeOfDay->tv_usec);
+
 	return 0;
 }
