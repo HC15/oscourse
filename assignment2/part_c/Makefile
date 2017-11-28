@@ -1,3 +1,4 @@
+CONFIG_MODULE_SIG=n
 # To build modules outside of the kernel tree, we run "make"
 # in the kernel source tree; the Makefile there then includes this
 # Makefile once again.
@@ -26,6 +27,6 @@ clean:
 
 else
 	# called from kernel build system: just declare what our modules are
-	obj-m := mytime.o 
+	obj-m := mytime.o
 endif
 
