@@ -18,14 +18,15 @@ static ssize_t numpipe_write(struct file *, const char __user *, size_t, loff_t 
 static int pipe_size = 1;
 module_param(pipe_size, int, S_IRUGO);
 
-char** pipe_buffer;
+//char** pipe_buffer;
+int *pipe_buffer;
+unsigned int pipe_index;
 
 static struct semaphore mutex;
 static struct semaphore empty;
 static struct semaphore full;
 
-static int device_open;
-static int pipe_free;
+static unsigned int used_by;
 
 static struct file_operations my_fops = {
 	.owner = THIS_MODULE,
@@ -43,45 +44,51 @@ static struct miscdevice numpipe_device = {
 
 static int __init numpipe_init(void) {
 	int device_number;
-	int pipe_index;
+	int index;
+
 	printk(KERN_INFO "numpipe module init\n");
 	device_number = misc_register(&numpipe_device);
 	if(device_number < 0) {
 		printk(KERN_ERR "numpipe module init failed\n");
 		return device_number;
 	}
-
+/*
 	pipe_buffer = (char**) kmalloc(pipe_size * sizeof(char*), GFP_KERNEL);
-	for(pipe_index = 0; pipe_index < pipe_size; pipe_index++) {
-		pipe_buffer[pipe_index] = (char*) kmalloc(10 * sizeof(char), GFP_KERNEL);
-		pipe_buffer[pipe_index] = '\0';
+	for(index = 0; index < pipe_size; index++) {
+		pipe_buffer[index] = (char*) kmalloc(10 * sizeof(char), GFP_KERNEL);
+		pipe_buffer[index] = '\0';
 		printk(KERN_INFO "%s", pipe_buffer[pipe_index]);
 	}
+*/
+	pipe_buffer = (int*) kmalloc(pipe_size * sizeof(int), GFP_KERNEL);
+	for(index = 0; index < pipe_size; index++) {
+		pipe_buffer[index] = 0;
+	}
+	pipe_index = 0;
 
 	sema_init(&mutex, 1);
 	sema_init(&empty, pipe_size);
 	sema_init(&full, 0);
 
-	device_open = 0;
-	pipe_free = pipe_size - 1;
+	used_by = 0;
 
 	printk(KERN_INFO "numpipe module init success\n");
 	return 0;
 }
 
 static int numpipe_open(struct inode *inode, struct file *file) {
-	device_open++;
+	used_by++;
 	printk(KERN_INFO "numpipe device opened\n");
-	printk(KERN_INFO "numpipe has %d devices open\n", device_open);
+	printk(KERN_INFO "numpipe has %d devices open\n", used_by);
 	return 0;
 }
 
 static int numpipe_close(struct inode *inode, struct file *file) {
-	if(device_open > 0) {
-		device_open--;
+	if(used_by != 0) {
+		used_by--;
 		printk(KERN_INFO "numpipe device closed\n");
-		printk(KERN_INFO "numpipe has %d devices open\n", device_open);
 	}
+	printk(KERN_INFO "numpipe has %d devices open\n", used_by);
 	return 0;
 }
 
@@ -100,13 +107,15 @@ static ssize_t numpipe_read(struct file *file, char __user *out, size_t size, lo
 		return -EFAULT;
 	}
 */
+	unsigned long bytes_read = sizeof(int);
 	down_interruptible(&mutex);
 	down_interruptible(&full);
-	copy_to_user(out, &pipe_buffer[pipe_size - pipe_free - 1], 40);
-	pipe_free++;
+	copy_to_user(out, &pipe_buffer[pipe_index], bytes_read);
+//	pipe_buffer[pipe_index] = '\0';
+	pipe_index--;
 	up(&empty);
 	up(&mutex);
-	return 0;
+	return bytes_read;
 }
 
 static ssize_t numpipe_write(struct file *file, const char __user *out, size_t size, loff_t *off) {
@@ -118,22 +127,25 @@ static ssize_t numpipe_write(struct file *file, const char __user *out, size_t s
 		return -EFAULT;
 	}
 */
+	unsigned long bytes_written = sizeof(int);
 	down_interruptible(&mutex);
 	down_interruptible(&empty);
-	copy_from_user(&pipe_buffer[pipe_size - pipe_free - 1], out, sizeof(int));
-	pipe_free--;
+//	printk(KERN_INFO "%d\n", pipe_buffer[pipe_index]);
+	copy_from_user(&pipe_buffer[pipe_index], out, bytes_written);
+//	printk(KERN_INFO "%d\n", pipe_buffer[pipe_index]);
+	pipe_index++;
 	up(&full);
 	up(&mutex);
-	return 0;
+	return bytes_written;
 }
 
 static void __exit numpipe_exit(void) {
-	int pipe_index;
-	misc_deregister(&numpipe_device);
-	for(pipe_index = 0; pipe_index < pipe_size; pipe_index++) {
-		kfree(pipe_buffer[pipe_index]);
-	}
 
+//	int index;
+	misc_deregister(&numpipe_device);
+//	for(index = 0; index < pipe_size; index++) {
+//		kfree(pipe_buffer[pipe_index]);
+//	}
 	printk(KERN_INFO "numpipe module exit\n");
 }
 
