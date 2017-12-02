@@ -24,6 +24,9 @@ static struct semaphore mutex;
 static struct semaphore empty;
 static struct semaphore full;
 
+static int device_open;
+static int pipe_free;
+
 static struct file_operations my_fops = {
 	.owner = THIS_MODULE,
 	.open = numpipe_open,
@@ -50,46 +53,87 @@ static int __init numpipe_init(void) {
 
 	pipe_buffer = (char**) kmalloc(pipe_size * sizeof(char*), GFP_KERNEL);
 	for(pipe_index = 0; pipe_index < pipe_size; pipe_index++) {
-		pipe_buffer[pipe_index] = (char*) kmalloc(40 * sizeof(char), GFP_KERNEL);
+		pipe_buffer[pipe_index] = (char*) kmalloc(10 * sizeof(char), GFP_KERNEL);
 		pipe_buffer[pipe_index] = '\0';
 		printk(KERN_INFO "%s", pipe_buffer[pipe_index]);
 	}
 
 	sema_init(&mutex, 1);
-	sema_init(&empty, 0);
-	sema_init(&full, pipe_size);
+	sema_init(&empty, pipe_size);
+	sema_init(&full, 0);
 
-
+	device_open = 0;
+	pipe_free = pipe_size - 1;
 
 	printk(KERN_INFO "numpipe module init success\n");
 	return 0;
 }
 
 static int numpipe_open(struct inode *inode, struct file *file) {
+	device_open++;
 	printk(KERN_INFO "numpipe device opened\n");
+	printk(KERN_INFO "numpipe has %d devices open\n", device_open);
 	return 0;
 }
 
 static int numpipe_close(struct inode *inode, struct file *file) {
-	printk(KERN_INFO "numpipe device closed\n");
+	if(device_open > 0) {
+		device_open--;
+		printk(KERN_INFO "numpipe device closed\n");
+		printk(KERN_INFO "numpipe has %d devices open\n", device_open);
+	}
 	return 0;
 }
 
 static ssize_t numpipe_read(struct file *file, char __user *out, size_t size, loff_t *off) {
-	if(access_ok(VERIFY_WRITE, out, size)) {
+/*
+	int pipe_index;
+	if(access_ok(VERIFY_WRITE, out, sizeof(char) * 40) {
+		down_interruptible(&mutex);
+		down_interruptible(&full);
+
+		up(&empty);
+		up(&mutex);
 		return 0;
 	}
 	else{
 		return -EFAULT;
 	}
+*/
+	down_interruptible(&mutex);
+	down_interruptible(&full);
+	copy_to_user(out, &pipe_buffer[pipe_size - pipe_free - 1], 40);
+	pipe_free++;
+	up(&empty);
+	up(&mutex);
+	return 0;
 }
 
 static ssize_t numpipe_write(struct file *file, const char __user *out, size_t size, loff_t *off) {
+/*
+	if(access_ok(VERIFY_READ, out, size)) {
+		return 0;
+	}
+	else{
+		return -EFAULT;
+	}
+*/
+	down_interruptible(&mutex);
+	down_interruptible(&empty);
+	copy_from_user(&pipe_buffer[pipe_size - pipe_free - 1], out, sizeof(int));
+	pipe_free--;
+	up(&full);
+	up(&mutex);
 	return 0;
 }
 
 static void __exit numpipe_exit(void) {
+	int pipe_index;
 	misc_deregister(&numpipe_device);
+	for(pipe_index = 0; pipe_index < pipe_size; pipe_index++) {
+		kfree(pipe_buffer[pipe_index]);
+	}
+
 	printk(KERN_INFO "numpipe module exit\n");
 }
 
