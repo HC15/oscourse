@@ -19,8 +19,10 @@ static int pipe_size = 1;
 module_param(pipe_size, int, S_IRUGO);
 
 //char** pipe_buffer;
-int *pipe_buffer;
-unsigned int pipe_index;
+static int *pipe_buffer;
+static unsigned int pipe_index;
+static unsigned int pipe_read;
+static unsigned int pipe_write;
 
 static struct semaphore mutex;
 static struct semaphore empty;
@@ -62,9 +64,12 @@ static int __init numpipe_init(void) {
 */
 	pipe_buffer = (int*) kmalloc(pipe_size * sizeof(int), GFP_KERNEL);
 	for(index = 0; index < pipe_size; index++) {
-		pipe_buffer[index] = 0;
+		pipe_buffer[index] = '\0';;
+		printk(KERN_INFO "%d", pipe_buffer[index]);
 	}
 	pipe_index = 0;
+	pipe_read = 0;
+	pipe_write = 0;
 
 	sema_init(&mutex, 1);
 	sema_init(&empty, pipe_size);
@@ -108,13 +113,26 @@ static ssize_t numpipe_read(struct file *file, char __user *out, size_t size, lo
 	}
 */
 	unsigned long bytes_read = sizeof(int);
-	down_interruptible(&mutex);
+//	down_interruptible(&mutex);
+	int index;
+	for(index = 0; index < pipe_size; index++) {
+		printk(KERN_INFO "%d ", pipe_buffer[index]);
+	}
+	printk(KERN_INFO "\n");
+
 	down_interruptible(&full);
-	copy_to_user(out, &pipe_buffer[pipe_index], bytes_read);
-//	pipe_buffer[pipe_index] = '\0';
+	down_interruptible(&mutex);
+//	printk(KERN_INFO "Read before %d\n", pipe_buffer[pipe_read]);
+	copy_to_user(out, &pipe_buffer[0], bytes_read);
+	for(index = 0; index < pipe_size - 1; index++) {
+		pipe_buffer[index] = pipe_buffer[index + 1];
+	}
+	pipe_buffer[pipe_size - 1] = '\0';
+//	printk(KERN_INFO "Read after %d\n", pipe_buffer[pipe_read]);
 	pipe_index--;
-	up(&empty);
 	up(&mutex);
+	up(&empty);
+//	up(&mutex);
 	return bytes_read;
 }
 
@@ -128,26 +146,33 @@ static ssize_t numpipe_write(struct file *file, const char __user *out, size_t s
 	}
 */
 	unsigned long bytes_written = sizeof(int);
-	down_interruptible(&mutex);
+	int index;
+	for(index = 0; index < pipe_size; index++) {
+		printk(KERN_INFO "%d ", pipe_buffer[index]);
+	}
+	printk(KERN_INFO "\n");
+
+//	down_interruptible(&mutex);
 	down_interruptible(&empty);
-//	printk(KERN_INFO "%d\n", pipe_buffer[pipe_index]);
+	down_interruptible(&mutex);
+	printk(KERN_INFO "Write before %d\n", pipe_buffer[pipe_write]);
 	copy_from_user(&pipe_buffer[pipe_index], out, bytes_written);
-//	printk(KERN_INFO "%d\n", pipe_buffer[pipe_index]);
+	printk(KERN_INFO "Write after %d\n", pipe_buffer[pipe_write]);
 	pipe_index++;
-	up(&full);
 	up(&mutex);
+	up(&full);
+//	up(&mutex);
 	return bytes_written;
 }
 
 static void __exit numpipe_exit(void) {
-
-//	int index;
-	misc_deregister(&numpipe_device);
-//	for(index = 0; index < pipe_size; index++) {
-//		kfree(pipe_buffer[pipe_index]);
+//	if(used_by == 0) {
+		misc_deregister(&numpipe_device);
+		kfree(pipe_buffer);
+		printk(KERN_INFO "numpipe module exit\n");
 //	}
-	printk(KERN_INFO "numpipe module exit\n");
 }
 
 module_init(numpipe_init);
 module_exit(numpipe_exit);
+
