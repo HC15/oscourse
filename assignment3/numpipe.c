@@ -113,10 +113,17 @@ static ssize_t numpipe_read(struct file *file, char __user *out, size_t size, lo
 	}
 	printk(KERN_INFO "\n");
 
+	int error;
 	if(access_ok(VERIFY_WRITE, out, bytes_read)) { // verify if we can write to userspace
-		down_interruptible(&full);
+		error = down_interruptible(&full);
+		if(error != 0) {
+			return -EINTR;
+		}
 //		down_interruptible(&mutex);
-		mutex_lock_interruptible(&lock);
+		error = mutex_lock_interruptible(&lock);
+		if(error != 0) {
+			return -EINTR;
+		}
 
 		copy_to_user(out, &pipe_buffer[0], bytes_read); // copy to user first thing inserted to before
 		for(index = 0; index < pipe_size - 1; index++) { // move everything down one like a queue
@@ -146,10 +153,17 @@ static ssize_t numpipe_write(struct file *file, const char __user *out, size_t s
 	}
 	printk(KERN_INFO "\n");
 
+	int error;
 	if(access_ok(VERIFY_READ, out, bytes_written)) { // verify if able to read from userspace
-		down_interruptible(&empty);
+		error = down_interruptible(&empty);
+		if(error != 0) {
+			return -EINTR;
+		}
 //		down_interruptible(&mutex);
-		mutex_lock_interruptible(&lock);
+		error = mutex_lock_interruptible(&lock);
+		if(error != 0) {
+			return -EINTR;
+		}
 
 		copy_from_user(&pipe_buffer[pipe_elements], out, bytes_written); // write to end of the pipe buffer
 		pipe_elements++; // whenever something is written from userspace there is another thing in pipe
