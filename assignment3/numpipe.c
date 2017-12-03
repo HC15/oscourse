@@ -110,6 +110,7 @@ static ssize_t numpipe_read(struct file *file, char __user *out, size_t size, lo
 	printk(KERN_INFO "\n");
 */
 	int error_interruptible; // int to check if interruptible produced an error
+	int index; // declare for use later in the function to mantain queue
 	if(access_ok(VERIFY_WRITE, out, bytes_read)) { // verify if we can write to userspace
 		// down
 		error_interruptible = down_interruptible(&full); // preform down on full, if nothing in buffer sleep
