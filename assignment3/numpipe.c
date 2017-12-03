@@ -5,6 +5,7 @@
 #include <linux/fs.h>
 #include <linux/slab.h>
 #include <linux/semaphore.h>
+#include <linux/mutex.h>
 #include <asm/uaccess.h>
 
 MODULE_LICENSE("GPL");
@@ -21,10 +22,14 @@ module_param(pipe_size, int, S_IRUGO); // set pipe size using parameter when ins
 
 static int *pipe_buffer; // int array to store everything in pipe
 static unsigned int pipe_elements; // number of elements currently in pipe
-
-static struct semaphore mutex; // binary semaphore to lock critical sections
+/*
+//static struct semaphore mutex; // binary semaphore to lock critical sections
 static struct semaphore empty; // semaphore to track empty slots in pipe buffer
 static struct semaphore full; // semaphore to track used slots in pipe buffer
+*/
+static DEFINE_MUTEX(lock);
+static DEFINE_SEMAPHORE(empty);
+static DEFINE_SEMAPHORE(full);
 
 static struct file_operations my_fops = {
 	.owner = THIS_MODULE,
@@ -60,7 +65,8 @@ static int __init numpipe_init(void) {
 	}
 	pipe_elements = 0; // when init there is nothing in the pipe
 
-	sema_init(&mutex, 1); // 1 for binary semaphore
+//	sema_init(&mutex, 1); // 1 for binary semaphore
+	mutex_init(&lock);
 	sema_init(&empty, pipe_size); // empty is equal to the size of pipe
 	sema_init(&full, 0); // always nothing full initially
 
@@ -109,7 +115,8 @@ static ssize_t numpipe_read(struct file *file, char __user *out, size_t size, lo
 
 	if(access_ok(VERIFY_WRITE, out, bytes_read)) { // verify if we can write to userspace
 		down_interruptible(&full);
-		down_interruptible(&mutex);
+//		down_interruptible(&mutex);
+		mutex_lock_interruptible(&lock);
 
 		copy_to_user(out, &pipe_buffer[0], bytes_read); // copy to user first thing inserted to before
 		for(index = 0; index < pipe_size - 1; index++) { // move everything down one like a queue
@@ -118,7 +125,8 @@ static ssize_t numpipe_read(struct file *file, char __user *out, size_t size, lo
 		pipe_buffer[pipe_size - 1] = '\0'; // set last element as null since one thing was removed
 		pipe_elements--; // whenever something is read from kernel one less element in pipe
 
-		up(&mutex);
+		mutex_unlock(&lock);
+//		up(&mutex);
 		up(&empty);
 		return bytes_read; // return the amount of bytes read, should always be 4
 	}
@@ -140,12 +148,14 @@ static ssize_t numpipe_write(struct file *file, const char __user *out, size_t s
 
 	if(access_ok(VERIFY_READ, out, bytes_written)) { // verify if able to read from userspace
 		down_interruptible(&empty);
-		down_interruptible(&mutex);
+//		down_interruptible(&mutex);
+		mutex_lock_interruptible(&lock);
 
 		copy_from_user(&pipe_buffer[pipe_elements], out, bytes_written); // write to end of the pipe buffer
 		pipe_elements++; // whenever something is written from userspace there is another thing in pipe
 
-		up(&mutex);
+		mutex_unlock(&lock);
+//		up(&mutex);
 		up(&full);
 		return bytes_written;
 	}
